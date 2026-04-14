@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Uber V53 LAUNCH READY</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial;
+      background: #000;
+      overflow: hidden;
+    }
+
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+
+    /* ================= APP SHEET ================= */
+    .sheet {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      background: rgba(255,255,255,0.98);
+      backdrop-filter: blur(14px);
+      border-top-left-radius: 24px;
+      border-top-right-radius: 24px;
+      padding: 14px;
+      z-index: 10;
+    }
+
+    .title {
+      text-align: center;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    .status {
+      text-align: center;
+      margin-top: 6px;
+      font-size: 13px;
+    }
+
+    .flow {
+      text-align: center;
+      font-size: 12px;
+      margin-top: 4px;
+      color: #444;
+    }
+
+    input, button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 8px;
+      border-radius: 12px;
+      border: 1px solid #ddd;
+      outline: none;
+    }
+
+    .btn-green {
+      background: #00c853;
+      color: white;
+      border: none;
+      font-weight: bold;
+    }
+
+    .btn-black {
+      background: #000;
+      color: white;
+      border: none;
+      font-weight: bold;
+    }
+
+    .btn-blue {
+      background: #2962ff;
+      color: white;
+      border: none;
+      font-weight: bold;
+    }
+
+    /* ================= STRIPE BOX ================= */
+    .payment {
+      margin-top: 10px;
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 12px;
+      font-size: 12px;
+    }
+
+    /* ================= PROGRESS ================= */
+    .progress {
+      height: 6px;
+      width: 100%;
+      background: #ddd;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .bar {
+      height: 100%;
+      width: 0%;
+      background: #00c853;
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div class="sheet">
+
+  <div class="title">🚀 Uber V53 Launch Ready</div>
+
+  <div id="flow" class="flow">State: Idle</div>
+
+  <div class="progress">
+    <div class="bar" id="bar"></div>
+  </div>
+
+  <input id="lat" placeholder="lat">
+  <input id="lng" placeholder="lng">
+
+  <button class="btn-green" onclick="createRide()">Request Ride</button>
+  <button class="btn-blue" onclick="simulatePayment()">Pay with Stripe (UI)</button>
+  <button class="btn-black" onclick="sendCourier()">Courier Update</button>
+
+  <div class="payment">
+    💳 Payment: Not charged (UI only)
+  </div>
+
+  <div class="status" id="status">Ready</div>
+</div>
+
+<script>
+const socket = io();
+
+let map;
+let markers = {};
+let stateIndex = 0;
+
+const states = [
+  "Requested",
+  "Searching courier",
+  "Courier assigned",
+  "On the way",
+  "Completed"
+];
+
+// ================= MAP =================
+fetch("/api/maps-key")
+.then(r => r.json())
+.then(d => {
+  const s = document.createElement("script");
+  s.src = "https://maps.googleapis.com/maps/api/js?key=" + d.key + "&callback=initMap";
+  s.async = true;
+  document.head.appendChild(s);
+});
+
+window.initMap = function () {
+  map = new google.maps.Map(document.getElementById("map"), {
+    center: { lat: 31.78, lng: 34.64 },
+    zoom: 13,
+    disableDefaultUI: true
+  });
+};
+
+// ================= FLOW =================
+function updateFlow() {
+  document.getElementById("flow").innerText =
+    "State: " + states[stateIndex];
+
+  document.getElementById("bar").style.width =
+    ((stateIndex + 1) / states.length) * 100 + "%";
+}
+
+// ================= RIDE =================
+function createRide() {
+  stateIndex = 1;
+  updateFlow();
+
+  fetch("/delivery", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      lat: +lat.value,
+      lng: +lng.value
+    })
+  });
+
+  setStatus("Ride requested");
+}
+
+// ================= PAYMENT (UI ONLY) =================
+function simulatePayment() {
+  setTimeout(() => {
+    stateIndex = 2;
+    updateFlow();
+    setStatus("Payment approved (mock)");
+  }, 1000);
+}
+
+// ================= COURIER =================
+function sendCourier() {
+  socket.emit("courier_live", {
+    id: "demo",
+    lat: +lat.value,
+    lng: +lng.value
+  });
+
+  stateIndex = Math.min(stateIndex + 1, states.length - 1);
+  updateFlow();
+}
+
+// ================= SOCKET =================
+socket.on("delivery_assigned", () => {
+  stateIndex = 3;
+  updateFlow();
+});
+
+// ================= STATUS =================
+function setStatus(t) {
+  document.getElementById("status").innerText = t;
+}
+</script>
+
+</body>
+</html>
