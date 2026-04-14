@@ -8,9 +8,9 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const { Server } = require("socket.io");
 
-const User = require("./models/User");
-const Delivery = require("./models/Delivery");
-const Courier = require("./models/Courier");
+const user = require("./models/user");
+const delivery = require("./models/delivery");
+const courier = require("./models/courier");
 const auth = require("./middleware/auth");
 const app = express();
 const server = http.createServer(app);

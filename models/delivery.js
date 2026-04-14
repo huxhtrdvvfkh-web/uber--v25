@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const DeliverySchema = new mongoose.Schema({
+const deliverySchema = new mongoose.Schema({
   userId: String,
   courierId: String,
   lat: Number,
@@ -8,4 +8,4 @@ const DeliverySchema = new mongoose.Schema({
   status: { type: String, default: "pending" }
 });
 
-module.exports = mongoose.model("Delivery", DeliverySchema);
+module.exports = mongoose.model("delivery", deliverySchema);
