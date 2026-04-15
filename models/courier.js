@@ -1,10 +1,10 @@
 const mongoose = require("mongoose");
 
-const courierSchema = new mongoose.Schema({
+const CourierSchema = new mongoose.Schema({
   userId: String,
   lat: Number,
   lng: Number,
-  available: { type: Boolean, default: true }
+  status: String
 });
 
-module.exports = mongoose.model("courier", courierSchema);
+module.exports = mongoose.model("Courier", CourierSchema);

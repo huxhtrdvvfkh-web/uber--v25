@@ -1,24 +1,24 @@
-module.exports = function socketHandler(io, Courier, Delivery, queue, redis) {
-  io.on("connection", async (socket) => {
+const Delivery = require("../models/delivery");
 
-    socket.emit("init_couriers", await Courier.find());
-    socket.emit("init_deliveries", await Delivery.find());
+module.exports = function (io) {
+  io.on("connection", (socket) => {
+    console.log("🔌 client connected");
 
-    socket.on("courier_ping", async (id) => {
-      await Courier.findByIdAndUpdate(id, { lastSeen: new Date() });
+    socket.on("courier_live", (data) => {
+      io.emit("courier_live", data);
     });
 
-    socket.on("queue_status", () => {
-      socket.emit("queue_info", {
-        jobs: queue.length,
-      });
-    });
+    socket.on("accept_delivery", async (data) => {
+      try {
+        await Delivery.findByIdAndUpdate(data.deliveryId, {
+          courierId: data.courierId,
+          status: "accepted"
+        });
 
-    socket.on("redis_status", async () => {
-      socket.emit("redis_info", {
-        system: redis ? await redis.get("system") : null,
-      });
+        io.emit("delivery_assigned", data);
+      } catch (err) {
+        console.log("socket error:", err.message);
+      }
     });
-
   });
 };

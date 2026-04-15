@@ -1,9 +1,25 @@
-module.exports = (io) => {
-  const express = require("express");
-  const router = express.Router();
-  const { updateCourier } = require("../controllers/couriercontroller");
+const express = require("express");
+const Courier = require("../models/courier");
 
-  router.post("/location", (req, res) => updateCourier(req, res, io));
+const router = express.Router();
 
-  return router;
-};
+router.post("/location", async (req, res) => {
+  try {
+    const { courierId, lat, lng } = req.body;
+
+    await Courier.findOneAndUpdate(
+      { userId: courierId },
+      { lat, lng, status: "active" },
+      { upsert: true }
+    );
+
+    req.io.emit("courier_live", { courierId, lat, lng });
+
+    res.json({ ok: true });
+
+  } catch (err) {
+    res.status(500).json({ error: "courier update failed" });
+  }
+});
+
+module.exports = router;
