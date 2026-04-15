@@ -9,15 +9,15 @@ const bcrypt = require("bcryptjs");
 const { Server } = require("socket.io");
 
 
-const User = require("./models/user");
-const Delivery = require("./models/delivery");
-const Courier = require("./models/courier");
+const user = require("./models/user");
+const delivery = require("./models/delivery");
+const courier = require("./models/courier");
 const auth = require("./middleware/auth");
 
 // ✅ NEW ROUTES
-const authRoutes = require("./routes/authroutes");
-const deliveryRoutes = require("./routes/deliveryroutes");
-const courierRoutes = require("./routes/courierroutes");
+const authroutes = require("./routes/authroutes");
+const deliveryroutes = require("./routes/deliveryroutes");
+const courierroutes = require("./routes/courierroutes");
 
 const app = express();
 const server = http.createServer(app);
