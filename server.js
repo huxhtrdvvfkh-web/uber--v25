@@ -8,12 +8,20 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const { Server } = require("socket.io");
 
-const user = require("./models/user");
-const delivery = require("./models/delivery");
-const courier = require("./models/courier");
+
+const User = require("./models/user");
+const Delivery = require("./models/delivery");
+const Courier = require("./models/courier");
 const auth = require("./middleware/auth");
+
+// ✅ NEW ROUTES
+const authRoutes = require("./routes/authroutes");
+const deliveryRoutes = require("./routes/deliveryroutes");
+const courierRoutes = require("./routes/courierroutes");
+
 const app = express();
 const server = http.createServer(app);
+
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -27,10 +35,15 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
+// ✅ NEW ROUTES USAGE
+app.use("/api/auth", authRoutes);
+app.use("/api/delivery", deliveryRoutes(io));
+app.use("/api/courier", courierRoutes(io));
+
 console.log("🚀 V55 DEPLOY READY STARTING");
 
 // =========================
-// SAFE MONGO CONNECT (לא מפיל שרת)
+// SAFE MONGO CONNECT
 mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("✅ Mongo Connected"))
   .catch(err => {
@@ -45,7 +58,9 @@ app.get("/api/maps-key", (req, res) => {
 });
 
 // =========================
-// REGISTER
+// ❌ OLD ROUTES (DISABLED)
+
+/*
 app.post("/register", async (req, res) => {
   try {
     const hash = await bcrypt.hash(req.body.password, 10);
@@ -63,8 +78,6 @@ app.post("/register", async (req, res) => {
   }
 });
 
-// =========================
-// LOGIN
 app.post("/login", async (req, res) => {
   try {
     const user = await User.findOne({ email: req.body.email });
@@ -85,8 +98,6 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// =========================
-// SAFE AUTH WRAPPER (לא מוחק את שלך)
 function safeAuth(req, res, next) {
   try {
     return auth(req, res, next);
@@ -95,8 +106,6 @@ function safeAuth(req, res, next) {
   }
 }
 
-// =========================
-// DELIVERY
 app.post("/delivery", safeAuth, async (req, res) => {
   try {
     if (!req.body.lat || !req.body.lng) {
@@ -119,8 +128,6 @@ app.post("/delivery", safeAuth, async (req, res) => {
   }
 });
 
-// =========================
-// COURIER LOCATION
 app.post("/courier/location", async (req, res) => {
   try {
     const { courierId, lat, lng } = req.body;
@@ -143,9 +150,10 @@ app.post("/courier/location", async (req, res) => {
     res.status(500).json({ error: "courier update failed" });
   }
 });
+*/
 
 // =========================
-// SOCKET SAFE (production stable)
+// SOCKET
 io.on("connection", (socket) => {
   console.log("🔌 client connected");
 
@@ -174,7 +182,7 @@ io.on("connection", (socket) => {
 });
 
 // =========================
-// HEALTH CHECK (חשוב לפרודקשן)
+// HEALTH CHECK
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",
@@ -183,7 +191,7 @@ app.get("/health", (req, res) => {
 });
 
 // =========================
-// START SERVER (PRODUCTION READY)
+// START SERVER
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
