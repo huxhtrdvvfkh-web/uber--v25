@@ -8,141 +8,161 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const { Server } = require("socket.io");
 
-
 const user = require("./models/user");
 const delivery = require("./models/delivery");
 const courier = require("./models/courier");
 const auth = require("./middleware/auth");
 
-// ✅ NEW ROUTES
-const authroutes = require("./routes/authroutes");
-const deliveryroutes = require("./routes/deliveryroutes");
-const courierroutes = require("./routes/courierroutes");
+const { getdistance } = require("./utils/distance");
 
 const app = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+  cors: { origin: "*", methods: ["get", "post"] }
 });
 
 // =========================
-// MIDDLEWARE
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-// ✅ NEW ROUTES USAGE
-app.use("/api/auth", authroutes);
-app.use("/api/delivery", deliveryroutes);
-app.use("/api/courier", courierroutes);
-
-console.log("🚀 V55 DEPLOY READY STARTING");
+console.log("🚀 v56 uber system starting");
 
 // =========================
-// SAFE MONGO CONNECT
-mongoose.connect(process.env.MONGO_URL)
-  .then(() => console.log("✅ Mongo Connected"))
-  .catch(err => {
-    console.log("❌ Mongo Error:", err.message);
-    console.log("⚠️ Running WITHOUT DB CRASH");
+// mongo
+mongoose.connect(process.env.mongo_url)
+  .then(() => console.log("✅ mongo connected"))
+  .catch(err => console.log("❌ mongo error:", err.message));
+
+// =========================
+// socket rooms
+io.on("connection", (socket) => {
+  console.log("🔌 client connected");
+
+  socket.on("join", (userid) => {
+    socket.join(userid);
   });
 
-// =========================
-// MAPS KEY
-app.get("/api/maps-key", (req, res) => {
-  res.json({ key: process.env.GOOGLE_MAPS_API_KEY });
+  socket.on("disconnect", () => {});
 });
 
 // =========================
-// ❌ OLD ROUTES (DISABLED)
+// maps key
+app.get("/api/maps-key", (req, res) => {
+  res.json({ key: process.env.google_maps_api_key });
+});
 
-/*
+// =========================
+// register
 app.post("/register", async (req, res) => {
   try {
     const hash = await bcrypt.hash(req.body.password, 10);
 
-    const user = await User.create({
+    const newuser = await user.create({
       name: req.body.name,
       email: req.body.email,
       password: hash,
       role: req.body.role || "user"
     });
 
-    res.json(user);
+    res.json(newuser);
   } catch (err) {
     res.status(500).json({ error: "register failed" });
   }
 });
 
+// =========================
+// login
 app.post("/login", async (req, res) => {
   try {
-    const user = await User.findOne({ email: req.body.email });
-    if (!user) return res.json({ error: "not found" });
+    const u = await user.findOne({ email: req.body.email });
+    if (!u) return res.json({ error: "not found" });
 
-    const ok = await bcrypt.compare(req.body.password, user.password);
+    const ok = await bcrypt.compare(req.body.password, u.password);
     if (!ok) return res.json({ error: "wrong password" });
 
     const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET
+      { id: u._id, role: u.role },
+      process.env.jwt_secret
     );
 
-    res.json({ token, user });
+    res.json({ token, user: u });
 
   } catch (err) {
     res.status(500).json({ error: "login failed" });
   }
 });
 
-function safeAuth(req, res, next) {
+// =========================
+function safeauth(req, res, next) {
   try {
     return auth(req, res, next);
-  } catch (err) {
+  } catch {
     return res.status(401).json({ error: "auth failed" });
   }
 }
 
-app.post("/delivery", safeAuth, async (req, res) => {
+// =========================
+// delivery smart match
+app.post("/delivery", safeauth, async (req, res) => {
   try {
-    if (!req.body.lat || !req.body.lng) {
-      return res.status(400).json({ error: "missing coordinates" });
+    const { lat, lng } = req.body;
+
+    if (!lat || !lng) {
+      return res.status(400).json({ error: "missing coords" });
     }
 
-    const delivery = await Delivery.create({
-      userId: req.user.id,
-      lat: req.body.lat,
-      lng: req.body.lng,
+    const d = await delivery.create({
+      userid: req.user.id,
+      lat,
+      lng,
       status: "pending"
     });
 
-    io.emit("new_delivery", delivery);
+    const couriers = await courier.find({ status: "active" });
 
-    res.json(delivery);
+    let closest = null;
+    let mindist = 999999;
+
+    for (let c of couriers) {
+      const dist = getdistance(lat, lng, c.lat, c.lng);
+      if (dist < mindist) {
+        mindist = dist;
+        closest = c;
+      }
+    }
+
+    if (closest) {
+      io.to(closest.userid).emit("new_delivery", d);
+    } else {
+      io.emit("new_delivery", d);
+    }
+
+    res.json(d);
 
   } catch (err) {
     res.status(500).json({ error: "delivery failed" });
   }
 });
 
+// =========================
+// courier location
 app.post("/courier/location", async (req, res) => {
   try {
-    const { courierId, lat, lng } = req.body;
+    const { courierid, lat, lng } = req.body;
 
-    if (!courierId) {
-      return res.status(400).json({ error: "missing courierId" });
+    if (!courierid) {
+      return res.status(400).json({ error: "missing courierid" });
     }
 
-    await Courier.findOneAndUpdate(
-      { userId: courierId },
-      { lat, lng, status: "active" },
+    await courier.findOneAndUpdate(
+      { userid: courierid },
+      { userid: courierid, lat, lng, status: "active" },
       { upsert: true }
     );
 
-    io.emit("courier_live", { id: courierId, lat, lng });
+    io.emit("courier_live", { id: courierid, lat, lng });
 
     res.json({ ok: true });
 
@@ -150,50 +170,35 @@ app.post("/courier/location", async (req, res) => {
     res.status(500).json({ error: "courier update failed" });
   }
 });
-*/
 
 // =========================
-// SOCKET
+// socket actions
 io.on("connection", (socket) => {
-  console.log("🔌 client connected");
-
-  socket.on("error", (err) => {
-    console.log("Socket error:", err.message);
-  });
-
-  socket.on("courier_live", (data) => {
-    if (!data?.id) return;
-    io.emit("courier_live", data);
-  });
 
   socket.on("accept_delivery", async (data) => {
     try {
-      await Delivery.findByIdAndUpdate(data.deliveryId, {
-        courierId: data.courierId,
+      await delivery.findByIdAndUpdate(data.deliveryid, {
+        courierid: data.courierid,
         status: "accepted"
       });
 
       io.emit("delivery_assigned", data);
 
     } catch (err) {
-      console.log("accept_delivery error:", err.message);
+      console.log(err.message);
     }
   });
+
 });
 
 // =========================
-// HEALTH CHECK
+// health
 app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    time: new Date().toISOString()
-  });
+  res.json({ ok: true });
 });
 
 // =========================
-// START SERVER
-const PORT = process.env.PORT || 3000;
-
-server.listen(PORT, () => {
-  console.log("🚀 V55 DEPLOY READY RUNNING ON PORT", PORT);
+const port = process.env.port || 3000;
+server.listen(port, () => {
+  console.log("🚀 running on port", port);
 });
