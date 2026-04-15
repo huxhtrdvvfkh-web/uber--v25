@@ -36,9 +36,9 @@ app.use(express.json());
 app.use(express.static("public"));
 
 // ✅ NEW ROUTES USAGE
-app.use("/api/auth", authRoutes);
-app.use("/api/delivery", deliveryRoutes(io));
-app.use("/api/courier", courierRoutes(io));
+app.use("/api/auth", authroutes);
+app.use("/api/delivery", deliveryroutes);
+app.use("/api/courier", courierroutes);
 
 console.log("🚀 V55 DEPLOY READY STARTING");
 
